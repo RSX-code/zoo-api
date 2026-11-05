@@ -21,10 +21,48 @@ HEADERS = {
     "Accept-Language": "th,en;q=0.8",
 }
 
+DESCRIPTION = """
+RESTful API ที่ดึงข้อมูลสถิติผู้เข้าชมสวนสัตว์ ปีงบประมาณ 2569
+จาก **Data.go.th** (ศูนย์กลางข้อมูลเปิดภาครัฐ) แล้วส่งกลับเป็น JSON
+
+## ผู้จัดทำ
+- ชื่อ: วรภัทร อึ้งวานิช
+- รหัสนักศึกษา: 66122519090
+- สาขาวิศวกรรมคอมพิวเตอร์ มหาวิทยาลัยราชภัฏสวนสุนันทา
+- งานข้อ 5: พัฒนา FastAPI จากข้อมูลภาครัฐ
+
+## แหล่งข้อมูล
+- ชุดข้อมูล: [zoo-visitors2569](https://data.go.th/dataset/zoo-visitors2569)
+- ผู้เผยแพร่: องค์การสวนสัตว์แห่งประเทศไทย ในพระบรมราชูปถัมภ์
+- Resource ID: `0ecc96cf-d914-42a1-b184-dbbd013c3c9c`
+
+## Endpoint
+| Method | Path | คำอธิบาย |
+|---|---|---|
+| GET | `/` | ข้อความต้อนรับและลิงก์ไปยัง endpoint หลัก |
+| GET | `/api/zoo-visitors` | ข้อมูลสถิติจาก Data.go.th พร้อมแหล่งที่มาและปีงบประมาณ |
+
+## วิธีดึงข้อมูล (ลองตามลำดับ)
+1. เรียก Data.go.th ผ่าน `datastore_search` (ข้อมูลสด)
+2. อ่านไฟล์ CSV ของ resource เดียวกัน
+3. อ่านสำเนาข้อมูลจริงที่บันทึกไว้ เมื่อเรียกสดไม่ได้
+   (ระบุ `fetched_by: snapshot` และเวลาที่ดึงใน `snapshot_fetched_at`)
+
+ค่า `fetched_by` ในผลลัพธ์บอกว่าข้อมูลมาจากวิธีไหน
+
+## โครงสร้างผลลัพธ์
+- `source` แหล่งข้อมูล ผู้เผยแพร่ ลิงก์ชุดข้อมูล และวิธีที่ใช้ดึง
+- `fiscal_year` ปีงบประมาณ (2569)
+- `count` จำนวนรายการที่ส่งกลับ
+- `records` รายการสถิติจริงตามทรัพยากร (ชื่อคอลัมน์ตามที่ Data.go.th กำหนด)
+"""
+
 app = FastAPI(
     title="Zoo Visitors API (ปีงบประมาณ 2569)",
-    description="RESTful API ที่ดึงข้อมูลสถิติผู้เข้าชมสวนสัตว์จาก Data.go.th",
-    version="1.1.0",
+    summary="API ข้อมูลสถิติผู้เข้าชมสวนสัตว์ จาก Data.go.th",
+    description=DESCRIPTION,
+    version="1.2.1",
+    license_info={"name": "Open Data Common (ตามเงื่อนไขของ Data.go.th)"},
 )
 
 
@@ -67,12 +105,19 @@ def read_snapshot(limit: int) -> tuple[list[dict], str]:
     return data["records"][:limit], data.get("fetched_at", "unknown")
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"], tags=["Info"], summary="หน้าแรก")   # รองรับ HEAD ที่ UptimeRobot ใช้เช็ก
 def root():
     return {"message": "Zoo Visitors API", "docs": "/docs", "endpoint": "/api/zoo-visitors"}
 
 
-@app.get("/api/zoo-visitors")
+@app.get(
+    "/api/zoo-visitors",
+    tags=["Zoo Visitors"],
+    summary="ดึงสถิติผู้เข้าชมสวนสัตว์ ปีงบประมาณ 2569",
+    description="ส่งข้อมูลจาก Data.go.th เป็น JSON พร้อมแหล่งที่มา ปีงบประมาณ และรายการสถิติ "
+                "ใช้ `limit` กำหนดจำนวนรายการสูงสุด (1 ถึง 1000)",
+    responses={502: {"description": "ดึงข้อมูลจาก Data.go.th ไม่สำเร็จ"}},
+)
 def zoo_visitors(limit: int = Query(100, ge=1, le=1000, description="จำนวนรายการสูงสุด")):
     errors = []
     method = "datastore_search"
